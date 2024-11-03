@@ -27,7 +27,7 @@ enum class creatures {
 	evil1 = 0, evil2 = 1, evil3 = 2, evil4 = 3,
 	evil5 = 4, evil6 = 5, hero = 6
 };
-enum class fields { field1 = 0, field2 = 1, field3 = 2, platform = 3 };
+enum class fields { field1 = 0, field2 = 1, field3 = 2, platform = 3, ground_platform = 4 };
 
 namespace gamedll
 {
@@ -140,6 +140,7 @@ namespace gamedll
 
 		bool vert_path = false;
 		bool hor_path = false;
+		bool jump_up = true;
 
 		int max_frames{};
 		int frame{};
@@ -169,7 +170,8 @@ namespace gamedll
 		creatures GetType() const;
 
 		int Attack();
-		bool Falling(ATOM_CONTAINER& platforms);
+		void Falling(ATOM_CONTAINER& platforms);
+		void Jumping(ATOM_CONTAINER& platforms);
 
 		virtual int GetFrame() = 0;
 

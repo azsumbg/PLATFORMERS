@@ -81,6 +81,7 @@ int level = 1;
 gamedll::RANDENGINE Randomizer{};
 std::vector<gamedll::FIELD>vFields;
 dirs ambient_dir = dirs::stop;
+std::vector<gamedll::FIELD>vPlatforms;
 
 gamedll::Creature Hero = nullptr;
 
@@ -237,10 +238,12 @@ void InitGame()
     vFields.clear();
     for (float i = -scr_width; i < scr_width * 2; i += scr_width)
         vFields.push_back(gamedll::FIELD(static_cast<fields>(Randomizer.generate(0, 2)), (float)(i)));
+    vPlatforms.clear();
+    vPlatforms.push_back(gamedll::FIELD(fields::ground_platform, 0));
 
     ClearHeap(&Hero);
     Hero = gamedll::CreatureFactory(creatures::hero, 100.0f, ground - 49.0f);
-    Hero->dir = dirs::right;
+    Hero->dir = dirs::stop;
 
     
 }
@@ -425,18 +428,35 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
 
     case WM_KEYDOWN:
         if (!Hero)break;
-        else if (Hero->GetFlag(JUMP_FLAG))break;
+        else if (Hero->GetFlag(JUMP_FLAG)) break;
         switch (wParam)
         {
         case VK_LEFT:
             Hero->dir = dirs::left;
+            Hero->Move((float)(level), true, 0, Hero->y);
             break;
 
         case VK_RIGHT:
             Hero->dir = dirs::right;
+            Hero->Move((float)(level), true, scr_width, Hero->y);
             break;
-        }
 
+        case VK_UP:
+            {
+                gamedll::ATOM_CONTAINER conPlatforms(vPlatforms.size());
+                
+                for (int i = 0; i < vPlatforms.size(); i++)
+                {
+                    gamedll::ATOMS anAtom(vPlatforms[i].x, vPlatforms[i].y,
+                        vPlatforms[i].GetWidth(), vPlatforms[i].GetHeight());
+                    conPlatforms.push_back(anAtom);
+                }
+                Hero->Jumping(conPlatforms);
+            }
+            break;
+
+        }
+        break;
 
     default: return DefWindowProc(hwnd, ReceivedMsg, wParam, lParam);
     }
@@ -948,7 +968,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             Draw->BeginDraw();
             Draw->Clear(D2D1::ColorF(D2D1::ColorF::Chocolate));
             if (InactBrush && bigFormat)
-                Draw->DrawTextW(L"ПАУЗА", 6, bigFormat, D2D1::RectF(20.0f, 200.0f, scr_width, scr_height), TextBrush);
+                Draw->DrawTextW(L"ПАУЗА", 6, bigFormat, D2D1::RectF(scr_width / 2 - 50.0f, 200.0f,
+                    scr_width, scr_height), TextBrush);
             Draw->EndDraw();
             continue;
         }
@@ -958,6 +979,32 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             ambient_dir = dirs::stop;
             if (Hero->dir == dirs::left)ambient_dir = dirs::right;
             else if (Hero->dir == dirs::right)ambient_dir = dirs::left;
+
+            if (Hero->GetFlag(JUMP_FLAG))
+            {
+                gamedll::ATOM_CONTAINER conPlatforms(vPlatforms.size());
+
+                for (int i = 0; i < vPlatforms.size(); i++)
+                {
+                    gamedll::ATOMS anAtom(vPlatforms[i].x, vPlatforms[i].y,
+                        vPlatforms[i].GetWidth(), vPlatforms[i].GetHeight());
+                    conPlatforms.push_back(anAtom);
+                }
+                Hero->Jumping(conPlatforms);
+            }
+            else if (Hero->GetFlag(FALL_FLAG))
+            {
+                gamedll::ATOM_CONTAINER conPlatforms(vPlatforms.size());
+
+                for (int i = 0; i < vPlatforms.size(); i++)
+                {
+                    gamedll::ATOMS anAtom(vPlatforms[i].x, vPlatforms[i].y,
+                        vPlatforms[i].GetWidth(), vPlatforms[i].GetHeight());
+                    conPlatforms.push_back(anAtom);
+                }
+                Hero->Falling(conPlatforms);
+            }
+            else Hero->Move((float)(level));
         }
         if (!vFields.empty())
         {
@@ -1038,6 +1085,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
 
+        if (!vPlatforms.empty())
+        {
+            for (std::vector<gamedll::FIELD>::iterator field = vPlatforms.begin(); field < vPlatforms.end(); field++)
+            {
+                switch (field->GetType())
+                {
+                case fields::platform:
+                    Draw->DrawBitmap(bmpPlatform, D2D1::RectF(field->x, field->y, field->ex, field->ey));
+                    break;
+
+                case fields::ground_platform:
+                    Draw->DrawBitmap(bmpGround, D2D1::RectF(field->x, field->y, field->ex, field->ey));
+                    break;
+                }
+            }
+        }
 
         if (Hero)
         {
@@ -1071,7 +1134,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     break;
 
                 case dirs::stop:
-                    Draw->DrawBitmap(bmpHeroWalkR[Hero->GetFrame()], Resizer(bmpHeroWalkR[Hero->GetFrame()], Hero->x, Hero->y));
+                    Draw->DrawBitmap(bmpHeroWalkR[0], Resizer(bmpHeroWalkR[Hero->GetFrame()], Hero->x, Hero->y));
                     break;
                 }
             }
