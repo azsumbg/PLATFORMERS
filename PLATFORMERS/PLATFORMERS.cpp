@@ -428,7 +428,7 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
 
     case WM_KEYDOWN:
         if (!Hero)break;
-        else if (Hero->GetFlag(JUMP_FLAG)) break;
+        if (Hero->GetFlag(JUMP_FLAG)) break;
         switch (wParam)
         {
         case VK_LEFT:
@@ -442,8 +442,10 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
             break;
 
         case VK_UP:
+            if (!Hero)break;
+            else
             {
-                gamedll::ATOM_CONTAINER conPlatforms(vPlatforms.size());
+                gamedll::ATOM_CONTAINER conPlatforms((int)(vPlatforms.size()));
                 
                 for (int i = 0; i < vPlatforms.size(); i++)
                 {
@@ -953,7 +955,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateResources();
 
 
-
     while (bMsg.message != WM_QUIT)
     {
         if ((bRet = PeekMessage(&bMsg, bHwnd, NULL, NULL, PM_REMOVE)) != 0)
@@ -982,9 +983,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
             if (Hero->GetFlag(JUMP_FLAG))
             {
-                gamedll::ATOM_CONTAINER conPlatforms(vPlatforms.size());
+                gamedll::ATOM_CONTAINER conPlatforms((int)(vPlatforms.size()));
 
-                for (int i = 0; i < vPlatforms.size(); i++)
+                for (int i = 0; i < (int)(vPlatforms.size()); i++)
                 {
                     gamedll::ATOMS anAtom(vPlatforms[i].x, vPlatforms[i].y,
                         vPlatforms[i].GetWidth(), vPlatforms[i].GetHeight());
@@ -992,10 +993,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 }
                 Hero->Jumping(conPlatforms);
             }
-            else if (Hero->GetFlag(FALL_FLAG))
+            else
             {
-                gamedll::ATOM_CONTAINER conPlatforms(vPlatforms.size());
+                Hero->SetFlag(FALL_FLAG);
 
+                gamedll::ATOM_CONTAINER conPlatforms((int)(vPlatforms.size()));
                 for (int i = 0; i < vPlatforms.size(); i++)
                 {
                     gamedll::ATOMS anAtom(vPlatforms[i].x, vPlatforms[i].y,
@@ -1003,8 +1005,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     conPlatforms.push_back(anAtom);
                 }
                 Hero->Falling(conPlatforms);
+                if (!Hero->GetFlag(FALL_FLAG))
+                {
+                    if (Hero->dir == dirs::left) Hero->Move((float)(level), true, 0, Hero->y);
+                    else if (Hero->dir == dirs::right) Hero->Move((float)(level), true, scr_width, Hero->y);
+                }
             }
-            else Hero->Move((float)(level));
+            
         }
         if (!vFields.empty())
         {
@@ -1016,7 +1023,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 if (ambient_dir == dirs::left)
                 {
                     field->dir = dirs::left;
-                    field->Move((float)(level));
+                    field->Move((float)(level + 1.0f));
                     if (field->GetFlag(LEFT_FLAG))
                     {
                         vFields.erase(field);
@@ -1027,7 +1034,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 else if (ambient_dir == dirs::right)
                 {
                     field->dir = dirs::right;
-                    field->Move((float)(level));
+                    field->Move((float)(level + 1.0f));
                     if (field->GetFlag(RIGHT_FLAG))
                     {
                         vFields.erase(field);
@@ -1044,9 +1051,52 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 vFields.push_back(gamedll::FIELD(static_cast<fields>(Randomizer.generate(0, 2)),
                     vFields.back().ex));
         }
-
-
-
+        if (vPlatforms.size() <= 8)
+        {
+            if (Randomizer.generate(0, 150) == 32)
+            {
+                bool is_ok = false;
+                gamedll::FIELD dummyPlatform(fields::platform, scr_width + (float)(Randomizer.generate(100, 250)));
+                while (!is_ok)
+                {
+                    is_ok = true;
+                    if (!vPlatforms.empty())
+                    {
+                        for (std::vector<gamedll::FIELD>::iterator field = vPlatforms.begin(); field < vPlatforms.end(); field++)
+                        {
+                            if (field->GetType() == fields::platform &&
+                                !(dummyPlatform.x >= field->ex || dummyPlatform.ex <= field->x
+                                    || dummyPlatform.y >= field->ey || dummyPlatform.ey <= field->y))
+                            {
+                                is_ok = false;
+                                dummyPlatform.x += (float)(Randomizer.generate(100, 250));
+                                dummyPlatform.SetEdges();
+                                break;
+                            }
+                        }
+                    }
+                }
+                vPlatforms.push_back(dummyPlatform);
+            }
+        }
+        
+        if (!vPlatforms.empty())
+        {
+            for (std::vector<gamedll::FIELD>::iterator field = vPlatforms.begin(); field < vPlatforms.end(); field++)
+            {
+                if (field->GetType() == fields::platform)
+                {
+                    field->dir = ambient_dir;
+                    field->Move((float)(level + 1.0f));
+                    if (field->GetFlag(LEFT_FLAG | RIGHT_FLAG))
+                    {
+                        vPlatforms.erase(field);
+                        break;
+                    }
+                }
+            }
+        }
+        
         //DRAW THINGS ***************
         if (Draw && nrmFormat && TextBrush && HgltBrush && InactBrush && BckgBrush)
         {
